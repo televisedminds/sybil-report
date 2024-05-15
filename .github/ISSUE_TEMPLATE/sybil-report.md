@@ -1,9 +1,9 @@
 ---
-name: Sybil Report
-about: Report Sybil Activity on LayerZero
-title: "[Sybil Report]"
-labels: under review
-assignees: LayerZero-GH
+name: Sybil Report  test
+about: Report Sybil Activity on LayerZero  
+title: "[Sybil Report]" 
+labels: under review  
+assignees: LayerZero-GH  
 
 ---
 
