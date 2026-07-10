@@ -22,13 +22,17 @@ that program ended in 2024; the original README is preserved at
 ## 60-second start
 
 Requires only Python 3.11+. No pip installs, no keys, no accounts.
+**New to this? Follow the step-by-step [docs/QUICKSTART.md](docs/QUICKSTART.md).**
 
 ```bash
 # 1) Offline demo: backtest all 4 strategies on 10 years of bundled BTC data
 python3 -m autopilot demo            # prints metrics, writes reports/demo-report.html
 
-# 2) Paper-trade live BTC prices (public data, fake money), with a dashboard
-python3 -m autopilot paper --config configs/paper-dca-btc.json
+# 2) Answer five questions, get a ready-to-run config
+python3 -m autopilot init
+
+# 3) Paper-trade live prices (public data, fake money), with a dashboard
+python3 -m autopilot paper --config configs/sma_cross-btc-usd-paper.json
 # → dashboard at http://127.0.0.1:8899  · Ctrl-C stops; state persists; restart resumes
 ```
 
@@ -53,6 +57,7 @@ Everything is Python standard library. `ccxt` is needed only for live trading.
 ## Commands
 
 ```bash
+python3 -m autopilot init                            # interactive setup wizard
 python3 -m autopilot demo                            # offline demo + report
 python3 -m autopilot fetch     --symbol ETH-USD --timeframe 1d --start 2020-01-01 --out data.csv
 python3 -m autopilot backtest  --csv data.csv --strategies dca,sma_cross,rsi_revert,grid --report r.html

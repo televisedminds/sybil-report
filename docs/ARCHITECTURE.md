@@ -61,7 +61,7 @@ simulation, paper and live share one behavioral contract.
 | `autopilot/server/page.py` | Shared design tokens + dependency-free SVG line chart (tooltips, dark mode) |
 | `autopilot/server/dashboard.py` | Read-only local web UI over a session db |
 | `autopilot/server/report.py` | Self-contained HTML backtest/session reports |
-| `autopilot/cli.py` | `fetch backtest demo paper live dashboard status resume report` |
+| `autopilot/cli.py` | `init fetch backtest demo paper live dashboard status resume report` |
 
 ## Design decisions worth knowing
 

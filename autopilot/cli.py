@@ -82,6 +82,146 @@ def _load_backtest_candles(cfg: Config):
 # subcommands
 # ---------------------------------------------------------------------------
 
+STRATEGY_MENU = [
+    ("sma_cross", "trend following: hold while the 50d average is above the 200d, "
+                  "otherwise sit in cash (recommended first strategy)"),
+    ("dca", "accumulation: buy a fixed amount on a schedule, only while the "
+            "market is above its 200-period average"),
+    ("rsi_revert", "dip buying: buy panic dips in uptrends, sell the bounce"),
+    ("grid", "range harvesting: ladder of buy-low/sell-high orders; earns in "
+             "sideways chop, LOSES in strong trends"),
+]
+
+DEFAULT_TF = {"sma_cross": "1d", "dca": "1h", "rsi_revert": "1d", "grid": "1h"}
+
+
+def _suggest_params(strategy: str, timeframe: str, cash: float) -> dict:
+    if strategy == "dca":
+        per_buy = max(10.0, round(cash / 100))
+        return {"every": 24 if timeframe in ("1m", "5m", "15m", "1h") else 7,
+                "quote_per_buy": per_buy, "trend_sma": 200,
+                "sell_on_trend_break": False}
+    if strategy == "sma_cross":
+        return {"fast": 50, "slow": 200, "target_frac": 0.95}
+    if strategy == "rsi_revert":
+        return {"period": 14, "buy_below": 30.0, "sell_above": 55.0,
+                "target_frac": 0.5, "trend_sma": 200}
+    if strategy == "grid":
+        return {"levels_per_side": 6, "span_pct": 20.0,
+                "quote_per_level": max(10.0, round(cash / 12)),
+                "recenter_mult": 1.5}
+    return {}
+
+
+def _ask(prompt: str, default: str, assume_yes: bool, validate=None) -> str:
+    if assume_yes:
+        return default
+    while True:
+        try:
+            raw = input(f"{prompt} [{default}]: ").strip()
+        except EOFError:
+            return default
+        value = raw or default
+        if validate is None:
+            return value
+        try:
+            validate(value)
+            return value
+        except Exception as e:
+            print(f"  -> {e}")
+
+
+def cmd_init(args) -> int:
+    yes = args.yes
+    if not yes:
+        print("Autopilot setup — press Enter to accept the [default].\n")
+
+    symbol = _ask("Market to trade (BTC-USD, ETH-USD, SOL-USD, ...)",
+                  (args.symbol or "BTC-USD"), yes).upper().replace("/", "-")
+    if "-" not in symbol:
+        return _err(f"symbol must look like 'BTC-USD', got {symbol!r}")
+
+    strategy = args.strategy
+    if not strategy and not yes:
+        print("\nStrategies:")
+        for i, (name, blurb) in enumerate(STRATEGY_MENU, 1):
+            print(f"  {i}) {name:<11}— {blurb}")
+        names = [n for n, _ in STRATEGY_MENU]
+
+        def _valid_strat(v):
+            if v.isdigit() and 1 <= int(v) <= len(names):
+                return
+            if v in names:
+                return
+            raise ValueError(f"pick 1-{len(names)} or one of: {', '.join(names)}")
+        picked = _ask("Strategy", "1", False, _valid_strat)
+        strategy = names[int(picked) - 1] if picked.isdigit() else picked
+    strategy = strategy or "sma_cross"
+    if strategy not in REGISTRY:
+        return _err(f"unknown strategy {strategy!r}; available: {', '.join(sorted(REGISTRY))}")
+
+    def _valid_tf(v):
+        from autopilot.data.candles import tf_seconds
+        tf_seconds(v)
+    timeframe = _ask("Candle timeframe", args.timeframe or DEFAULT_TF[strategy],
+                     yes, _valid_tf)
+
+    def _valid_cash(v):
+        if float(v) <= 0:
+            raise ValueError("must be a positive number")
+    cash = float(_ask("Pretend starting cash (paper money, $)",
+                      str(args.cash), yes, _valid_cash))
+
+    def _valid_port(v):
+        p = int(v)
+        if not (1 <= p <= 65535):
+            raise ValueError("must be a port number 1-65535")
+    port = int(_ask("Dashboard port", str(args.port), yes, _valid_port))
+
+    webhook = args.webhook if args.webhook is not None else _ask(
+        "Discord/Slack webhook URL for alerts (Enter to skip)", "", yes)
+
+    out = args.out or f"configs/{strategy}-{symbol.lower()}-paper.json"
+    if os.path.exists(out) and not args.force:
+        return _err(f"{out} already exists (use --force to overwrite, "
+                    "or --out for a different name)")
+
+    stem = os.path.splitext(os.path.basename(out))[0]
+    raw = {
+        "_generated_by": "autopilot init — safe to edit by hand",
+        "mode": "paper",
+        "symbol": symbol,
+        "timeframe": timeframe,
+        "source": "auto",
+        "start_cash": cash,
+        "strategy": {"name": strategy,
+                     "params": _suggest_params(strategy, timeframe, cash)},
+        "risk": {"max_position_pct": 95, "max_order_pct": 25,
+                 "daily_loss_limit_pct": 5, "max_drawdown_pct": 30,
+                 "max_orders_per_day": 60},
+        "paper": {"poll_seconds": 60, "state_db": f"state/{stem}.db"},
+        "dashboard": {"enabled": True, "host": "127.0.0.1", "port": port},
+        "notify": {"webhook_url": webhook or None},
+    }
+    Config.from_dict(json.loads(json.dumps(raw)))  # validate before writing
+
+    os.makedirs(os.path.dirname(os.path.abspath(out)) or ".", exist_ok=True)
+    with open(out, "w", encoding="utf-8") as f:
+        json.dump(raw, f, indent=2)
+        f.write("\n")
+
+    print(f"\nwrote {out}")
+    print(f"  market    : {symbol} ({timeframe} candles)")
+    print(f"  strategy  : {strategy} {json.dumps(raw['strategy']['params'])}")
+    print(f"  paper cash: ${cash:,.0f} (no real money involved)")
+    print(f"  dashboard : http://127.0.0.1:{port}")
+    print(f"  state file: state/{stem}.db (delete it to start the session over)")
+    print("\nStart it with:\n")
+    print(f"  python3 -m autopilot paper --config {out}\n")
+    print("Stop any time with Ctrl-C — progress is saved and the same command resumes.")
+    return 0
+
+
 def cmd_fetch(args) -> int:
     source = make_source(args.source, args.timeframe)
     start_ms = parse_date_ms(args.start) if args.start else None
@@ -315,6 +455,20 @@ def build_parser() -> argparse.ArgumentParser:
                     "live only behind explicit interlocks.")
     p.add_argument("--version", action="version", version=f"autopilot {__version__}")
     sub = p.add_subparsers(dest="cmd", required=True)
+
+    ini = sub.add_parser("init", help="interactive setup: creates a paper-trading config")
+    ini.add_argument("--symbol")
+    ini.add_argument("--strategy", help=f"one of: {', '.join(sorted(REGISTRY))}")
+    ini.add_argument("--timeframe")
+    ini.add_argument("--cash", type=float, default=10_000.0)
+    ini.add_argument("--port", type=int, default=8899)
+    ini.add_argument("--webhook")
+    ini.add_argument("--out")
+    ini.add_argument("--yes", action="store_true",
+                     help="accept all defaults, no prompts")
+    ini.add_argument("--force", action="store_true",
+                     help="overwrite an existing config file")
+    ini.set_defaults(fn=cmd_init)
 
     f = sub.add_parser("fetch", help="download candle history to CSV")
     f.add_argument("--symbol", required=True)
