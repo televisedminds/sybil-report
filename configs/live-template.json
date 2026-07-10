@@ -1,0 +1,24 @@
+{
+  "_README": "LIVE TRADING TEMPLATE — real money. Read docs/GO-LIVE.md fully first. This file alone does nothing: live mode also requires AUTOPILOT_LIVE_CONFIRM, AUTOPILOT_API_KEY and AUTOPILOT_API_SECRET in the environment (trade-only key, withdrawals disabled). Start with a capital_cap you can lose without pain.",
+
+  "mode": "live",
+  "symbol": "BTC-USD",
+  "timeframe": "1d",
+  "source": "auto",
+  "start_cash": 500,
+  "strategy": {
+    "name": "sma_cross",
+    "params": {"fast": 50, "slow": 200, "target_frac": 0.95}
+  },
+  "risk": {
+    "max_position_pct": 95,
+    "max_order_pct": 50,
+    "daily_loss_limit_pct": 5,
+    "max_drawdown_pct": 25,
+    "max_orders_per_day": 10
+  },
+  "paper": {"poll_seconds": 300, "state_db": "state/live-btc.db"},
+  "live": {"exchange": "kraken", "capital_cap": 500},
+  "dashboard": {"enabled": true, "host": "127.0.0.1", "port": 8896},
+  "notify": {"webhook_url": null}
+}

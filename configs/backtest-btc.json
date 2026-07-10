@@ -1,0 +1,13 @@
+{
+  "mode": "backtest",
+  "symbol": "BTC-USD",
+  "timeframe": "1d",
+  "source": "csv",
+  "csv_path": "sample_data/BTC-USD-1d.csv",
+  "start_cash": 10000,
+  "strategy": {
+    "name": "sma_cross",
+    "params": {"fast": 50, "slow": 200, "target_frac": 0.95}
+  },
+  "backtest": {"start": "2018-01-01", "end": null}
+}

@@ -1,37 +1,132 @@
-# LayerZero Sybil Reporting
+# Autopilot — a self-hosted systematic trading platform
 
-The [deadline to self-report](https://sybil.layerzero.network/) as sybil is May 18th, 02:00 UTC, following the publication of the up-to-date list of self-reported and identified sybil addresses found by LayerZero Foundation, Chaos Labs, and Nansen. This will mark the end of Phase 1 of [addressing sybil activity](https://medium.com/layerzero-official/addressing-sybil-activity-a2f92218ddd3). 
+Autopilot is a complete, zero-dependency Python platform that runs rule-based
+trading strategies 24/7: it fetches market data, decides, executes, enforces
+risk limits, persists every event, and serves a live web dashboard — with no
+accounts, no API keys, and no money required to start. It paper-trades real
+market prices out of the box; putting real money behind it is a separate,
+deliberately hard-to-flip switch.
 
-Phase 2 begins on May 18th at 02:00 UTC, at which anyone can submit a sybil activity report. Successful reports result in the sybil addresses receiving nothing and the bounty hunter receiving 10% of the sybil’s intended allocation. 
+**The honest part, first.** There is no machine that guarantees profit — anyone
+selling one is lying to you. What professionals actually run is *systematic
+trading infrastructure*: strategies with a understood edge and failure modes,
+validated on history, executed with strict risk control, and monitored. That is
+what this is. It automates 100% of the *operation*. It cannot automate away
+*risk*. Backtests here are measurements of the past, not promises about the
+future. Read [docs/RISKS.md](docs/RISKS.md) before even thinking about live mode.
 
-Bounty hunters can use the information below to start producing reports; however, submissions will not be open until May 18th at 02:00 UTC. Submissions received before the start time, and after the deadline, will not be considered.
+*(This repository previously hosted the LayerZero sybil-report bounty docs —
+that program ended in 2024; the original README is preserved at
+[docs/legacy/LAYERZERO-SYBIL-REPORTING.md](docs/legacy/LAYERZERO-SYBIL-REPORTING.md).)*
 
-**All transaction data prior to Snapshot #1 can be downloaded [here (Dropbox)](https://www.dropbox.com/scl/fo/m0ji3zbmbockvqkyl9353/ALYUg0-rLU2fuDMSd9nuB34?rlkey=kdu7zf877k919c34t754nxerc&st=qz5cfa1n&dl=0) or [here (S3 Bucket)](https://layerzerodataset.s3.us-east-2.amazonaws.com/snapshot1_transactions.csv.gz). The data is provided in two formats, one single csv file and a tar file that is split into smaller chunks.**
+## 60-second start
 
-## Guidelines
+Requires only Python 3.11+. No pip installs, no keys, no accounts.
 
-- **Report Timeline:** Sybil activity must predate [Snapshot #1](https://twitter.com/LayerZero_Labs/status/1785821562475839843).
-- **Excluded Addresses:** Bounty addresses must not overlap with the identified sybil list published by LayerZero, Nansen, and Chaos (which will include self-reported addresses). 
-- **Minimum Address:** Reports must contain at least 20 addresses with clear methodology.
-- **Disqualifications:** Reports including addresses already published, addresses with no LayerZero transactions, or reports lacking sufficient reasoning and/or methodology will be disqualified. 
-- **Submission Deadline:** The deadline to submit reports is May 31st 23:59 UTC
-- **Submission Review:** Bounty awarded to the first **eligible** report for a given sybil address.
-- **Final Authority:** Eligibility of a submission is at the sole discretion of LayerZero Foundation and its best efforts to review all submissions.
+```bash
+# 1) Offline demo: backtest all 4 strategies on 10 years of bundled BTC data
+python3 -m autopilot demo            # prints metrics, writes reports/demo-report.html
 
+# 2) Paper-trade live BTC prices (public data, fake money), with a dashboard
+python3 -m autopilot paper --config configs/paper-dca-btc.json
+# → dashboard at http://127.0.0.1:8899  · Ctrl-C stops; state persists; restart resumes
+```
 
-# How to Report
+That second command is the actual product: a daemon that trades a simulated
+account against live market data around the clock, so a strategy can prove
+itself for weeks before a single real dollar is exposed.
 
-Use the Issue Template within this Repository to provide the following:
+## What's inside
 
-### Sybil Addresses
-Provide a list of LayerZero sybil addresses that would currently receive a token allocation and are not on the lists published by LayerZero, Nansen, and Chaos (which includes self-reported addresses).
-### Reasoning 
-Describe in detail the relationship between LayerZero addresses suspected of sybil. The goal is to determine how these addresses are linked to each other and/or linked to sybil activity. 
-### Methodology 
-Explain the method used to identify the addresses and provide proof that they are all controlled by a single individual or entity. The methodology should be easily verifiable, and have a low risk of misclassifying real users, otherwise the report will be deemed ineligible. Include links to any additional materials, such as a GitHub repo with the script used to uncover the reported addresses.
-### Reward Address
-Please provide an Ethereum address that will receive any potential rewards earned from this submission. Note: this cannot be claimed until TGE. All allocation eligibility will be subject to any legal or geographic requirements.
+| Piece | What it does |
+|---|---|
+| **Backtester** | Event-driven, no lookahead (signals on close, fills next open), fees + slippage modeled, honest metrics vs buy & hold |
+| **4 strategies** | `dca` (accumulation w/ trend filter) · `sma_cross` (trend following) · `rsi_revert` (mean reversion) · `grid` (range harvesting) — all parameterized, all documented with failure modes |
+| **Risk engine** | Per-order & position caps → daily-loss halt → max-drawdown **kill switch** that flattens and stays down until a human runs `autopilot resume` |
+| **Paper broker** | Live public prices (Coinbase → Kraken fallback), simulated fills with slippage/fees, crash-safe SQLite state |
+| **Live broker** | Real orders via [ccxt](https://github.com/ccxt/ccxt) (optional install), gated behind [four interlocks](docs/GO-LIVE.md), hard capital ceiling the bot cannot exceed |
+| **Dashboard** | Local web UI: equity vs buy & hold, positions, trades, events, risk state. Read-only, zero JS dependencies |
+| **Reports** | One-file HTML backtest/session reports you can archive or share |
 
+Everything is Python standard library. `ccxt` is needed only for live trading.
 
-*This framework is inspired by previous work done by [Safe](https://github.com/safe-global/safe-user-allocation-reports/) and [Hop](https://github.com/hop-protocol/hop-airdrop).* 
+## Commands
 
+```bash
+python3 -m autopilot demo                            # offline demo + report
+python3 -m autopilot fetch     --symbol ETH-USD --timeframe 1d --start 2020-01-01 --out data.csv
+python3 -m autopilot backtest  --csv data.csv --strategies dca,sma_cross,rsi_revert,grid --report r.html
+python3 -m autopilot backtest  --config configs/backtest-btc.json
+python3 -m autopilot paper     --config configs/paper-dca-btc.json
+python3 -m autopilot status    --state state/paper-dca-btc.db
+python3 -m autopilot report    --state state/paper-dca-btc.db --out session.html
+python3 -m autopilot dashboard --state state/paper-dca-btc.db --port 8899
+python3 -m autopilot resume    --state state/paper-dca-btc.db   # re-arm after kill switch
+python3 -m autopilot live      --config configs/live-template.json   # REAL MONEY — read docs/GO-LIVE.md
+```
+
+Run several markets/strategies at once by launching multiple `paper` processes,
+each with its own config and `state_db`.
+
+## What the data actually says
+
+Full-period backtests on real Coinbase daily candles (25 bps fee + 5 bps
+slippage per fill, $10,000 start). Generated with `autopilot backtest`;
+regenerate any time — numbers below were produced 2026-07-10:
+
+**BTC-USD 2016 → 2026** (buy & hold: +14,674%, but with an 84% max drawdown)
+
+| strategy | return | CAGR | Sharpe | max DD | fills |
+|---|---:|---:|---:|---:|---:|
+| dca (trend-filtered) | +7,203% | 50.3% | 0.95 | 83.8% | 50 |
+| sma_cross 50/200 | +6,089% | 48.0% | 1.01 | 69.8% | 74 |
+| rsi_revert | +112% | 7.4% | 0.51 | 31.1% | 45 |
+| grid | +1,895% | 32.9% | 0.94 | 71.2% | 1,674 |
+
+**BTC-USD 2022 → 2026** (harder regime; buy & hold: +34.8%, max DD 67%)
+
+| strategy | return | CAGR | Sharpe | max DD |
+|---|---:|---:|---:|---:|
+| dca (trend-filtered) | +114.7% | 18.4% | 0.64 | 53.1% |
+| sma_cross 50/200 | +79.1% | 13.7% | 0.56 | 36.2% |
+| rsi_revert | +9.2% | 2.0% | 0.21 | 20.8% |
+| grid | **−5.2%** | −1.2% | 0.16 | 57.3% |
+
+Read those tables the way a professional would: nothing beat buy & hold's raw
+return over a decade in which BTC went up ~147× — but trend-following matched
+its growth with a third less drawdown and *beat it outright* in the recent
+regime, while grid (the strategy every "passive income bot" service sells)
+**lost money** in a trending market. Full analysis, per-strategy failure modes,
+and why these four strategies were chosen: [docs/RESEARCH.md](docs/RESEARCH.md).
+
+## The path to real money (if you choose it)
+
+1. Run `paper` for **2–4 weeks minimum**; compare results to the backtest.
+2. Read [docs/GO-LIVE.md](docs/GO-LIVE.md) and [docs/RISKS.md](docs/RISKS.md) fully.
+3. Create an exchange API key with **trade-only** permission (no withdrawals).
+4. `pip install ccxt`, set the three environment interlocks, set a small
+   `capital_cap` you can lose without pain.
+5. `python3 -m autopilot live --config your-live.json` — the risk engine,
+   kill switch, and dashboard behave exactly as they did on paper.
+
+The bot never touches more cash than `live.capital_cap`, halts itself for the
+day after the daily-loss limit, and flattens + locks after the max-drawdown
+limit until you personally re-arm it.
+
+## Development
+
+```bash
+python3 -m unittest discover -s tests    # 93 tests, all offline
+```
+
+Architecture and extension guide (adding a strategy is ~30 lines):
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). CI runs the suite plus an
+offline end-to-end demo on every push.
+
+## Disclaimer
+
+This software is provided for education and research. It is not investment
+advice. Crypto assets are extremely volatile; leverage of any kind is not
+supported on purpose. You are solely responsible for anything you deploy with
+real funds, including tax obligations. Past performance — simulated or real —
+does not indicate future results.

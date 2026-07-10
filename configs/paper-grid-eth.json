@@ -1,0 +1,21 @@
+{
+  "mode": "paper",
+  "symbol": "ETH-USD",
+  "timeframe": "1h",
+  "source": "auto",
+  "start_cash": 10000,
+  "strategy": {
+    "name": "grid",
+    "params": {"levels_per_side": 6, "span_pct": 20, "quote_per_level": 600, "recenter_mult": 1.5}
+  },
+  "risk": {
+    "max_position_pct": 80,
+    "max_order_pct": 10,
+    "daily_loss_limit_pct": 5,
+    "max_drawdown_pct": 25,
+    "max_orders_per_day": 60
+  },
+  "paper": {"poll_seconds": 60, "state_db": "state/paper-grid-eth.db"},
+  "dashboard": {"enabled": true, "host": "127.0.0.1", "port": 8897},
+  "notify": {"webhook_url": null}
+}

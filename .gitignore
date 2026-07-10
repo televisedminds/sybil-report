@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+*.egg-info/
+build/
+dist/
+.venv/
+
+# session state and generated reports are runtime artifacts
+state/
+reports/
+*.db
+*.db-wal
+*.db-shm

@@ -1,0 +1,21 @@
+{
+  "mode": "paper",
+  "symbol": "BTC-USD",
+  "timeframe": "1d",
+  "source": "auto",
+  "start_cash": 10000,
+  "strategy": {
+    "name": "sma_cross",
+    "params": {"fast": 50, "slow": 200, "target_frac": 0.95}
+  },
+  "risk": {
+    "max_position_pct": 100,
+    "max_order_pct": 100,
+    "daily_loss_limit_pct": 8,
+    "max_drawdown_pct": 35,
+    "max_orders_per_day": 10
+  },
+  "paper": {"poll_seconds": 300, "state_db": "state/paper-sma-btc.db"},
+  "dashboard": {"enabled": true, "host": "127.0.0.1", "port": 8898},
+  "notify": {"webhook_url": null}
+}

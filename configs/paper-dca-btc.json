@@ -1,0 +1,21 @@
+{
+  "mode": "paper",
+  "symbol": "BTC-USD",
+  "timeframe": "1h",
+  "source": "auto",
+  "start_cash": 10000,
+  "strategy": {
+    "name": "dca",
+    "params": {"every": 24, "quote_per_buy": 75, "trend_sma": 200, "sell_on_trend_break": false}
+  },
+  "risk": {
+    "max_position_pct": 90,
+    "max_order_pct": 10,
+    "daily_loss_limit_pct": 5,
+    "max_drawdown_pct": 30,
+    "max_orders_per_day": 20
+  },
+  "paper": {"poll_seconds": 60, "state_db": "state/paper-dca-btc.db"},
+  "dashboard": {"enabled": true, "host": "127.0.0.1", "port": 8899},
+  "notify": {"webhook_url": null}
+}

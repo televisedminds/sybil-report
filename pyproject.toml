@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "autopilot-trader"
+version = "0.1.0"
+description = "Self-hosted systematic trading platform: backtest, paper-trade 24/7 with zero keys, go live only behind explicit interlocks."
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+keywords = ["trading", "backtesting", "crypto", "systematic", "paper-trading"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Financial and Insurance Industry",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Office/Business :: Financial :: Investment",
+]
+dependencies = []
+
+[project.optional-dependencies]
+live = ["ccxt>=4.0"]
+
+[project.scripts]
+autopilot = "autopilot.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["autopilot*"]
