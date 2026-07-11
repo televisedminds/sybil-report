@@ -67,7 +67,8 @@ python3 -m autopilot status    --state state/paper-dca-btc.db
 python3 -m autopilot report    --state state/paper-dca-btc.db --out session.html
 python3 -m autopilot dashboard --state state/paper-dca-btc.db --port 8899
 python3 -m autopilot resume    --state state/paper-dca-btc.db   # re-arm after kill switch
-python3 -m autopilot live      --config configs/live-template.json   # REAL MONEY — read docs/GO-LIVE.md
+python3 -m autopilot live-check --config my-live.json   # verify a live setup, places NO orders
+python3 -m autopilot live      --config my-live.json    # REAL MONEY — read docs/GO-LIVE.md
 ```
 
 Run several markets/strategies at once by launching multiple `paper` processes,

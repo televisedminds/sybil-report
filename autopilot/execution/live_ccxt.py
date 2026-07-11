@@ -50,6 +50,122 @@ def _load_ccxt():
         ) from None
 
 
+# ---------------------------------------------------------------------------
+# Preflight: verify the entire live setup WITHOUT placing any order.
+# ---------------------------------------------------------------------------
+
+class Check:
+    """One preflight check result. ok is True/False, or None if skipped."""
+
+    def __init__(self, name: str, ok: bool | None, detail: str = ""):
+        self.name = name
+        self.ok = ok
+        self.detail = detail
+
+    @property
+    def icon(self) -> str:
+        return {True: "✅", False: "❌", None: "⏭️ "}[self.ok]
+
+
+def run_live_preflight(cfg: Config, env: dict | None = None, client=None,
+                       data_source=None) -> list[Check]:
+    """Read-only verification of a live config: interlocks, keys, venue,
+    symbol, balance vs cap, market data. Never sends an order."""
+    env = env if env is not None else dict(os.environ)
+    checks: list[Check] = []
+
+    checks.append(Check("config mode is 'live' with a positive capital_cap",
+                        cfg.mode == "live" and cfg.live_capital_cap > 0,
+                        f"mode={cfg.mode}, capital_cap={cfg.live_capital_cap}"))
+    checks.append(Check(f"{CONFIRM_ENV} confirmation phrase set",
+                        env.get(CONFIRM_ENV) == CONFIRM_PHRASE,
+                        "" if env.get(CONFIRM_ENV) == CONFIRM_PHRASE else
+                        f"export {CONFIRM_ENV}={CONFIRM_PHRASE}"))
+    keys_ok = bool(env.get(KEY_ENV)) and bool(env.get(SECRET_ENV))
+    checks.append(Check(f"{KEY_ENV} / {SECRET_ENV} set (trade-only key, "
+                        "withdrawals disabled)", keys_ok))
+
+    symbol = cfg.symbol.replace("-", "/")
+    if client is None:
+        try:
+            ccxt = _load_ccxt()
+            checks.append(Check("ccxt installed", True,
+                                f"version {getattr(ccxt, '__version__', '?')}"))
+        except BrokerError as e:
+            checks.append(Check("ccxt installed", False, str(e)))
+            ccxt = None
+        if ccxt is not None:
+            exchange_cls = getattr(ccxt, cfg.live_exchange, None)
+            checks.append(Check(f"exchange '{cfg.live_exchange}' exists in ccxt",
+                                exchange_cls is not None))
+            if exchange_cls is not None and keys_ok:
+                client = exchange_cls({"apiKey": env.get(KEY_ENV, ""),
+                                       "secret": env.get(SECRET_ENV, ""),
+                                       "enableRateLimit": True})
+    else:
+        checks.append(Check("ccxt installed", True, "using injected client"))
+        checks.append(Check(f"exchange '{cfg.live_exchange}' exists in ccxt", True,
+                            "using injected client"))
+
+    if client is None:
+        checks.append(Check(f"exchange lists {symbol}", None, "skipped: no client"))
+        checks.append(Check("API key can read balances", None, "skipped: no client"))
+        checks.append(Check("quote balance vs capital_cap", None, "skipped: no client"))
+    else:
+        try:
+            markets = client.load_markets()
+            listed = symbol in markets
+            checks.append(Check(f"exchange lists {symbol}", listed,
+                                "" if listed else
+                                f"not found; similar: "
+                                f"{', '.join(sorted(m for m in markets if m.startswith(symbol.split('/')[0]))[:5]) or 'none'}"))
+        except Exception as e:
+            checks.append(Check(f"exchange lists {symbol}", False, str(e)))
+        try:
+            bal = client.fetch_balance()
+            quote = cfg.symbol.split("-")[1]
+            free = float((bal.get("free") or {}).get(quote) or 0.0)
+            checks.append(Check("API key can read balances", True,
+                                f"free {quote}: {free:,.2f}"))
+            usable = min(free, cfg.live_capital_cap)
+            checks.append(Check(
+                "quote balance vs capital_cap",
+                usable >= MIN_TRADE_QUOTE,
+                f"bot will use min(balance, cap) = {usable:,.2f} {quote}"
+                + ("" if usable >= MIN_TRADE_QUOTE else
+                   f" — below the {MIN_TRADE_QUOTE:.0f} minimum; deposit more first")))
+        except Exception as e:
+            checks.append(Check("API key can read balances", False, str(e)))
+            checks.append(Check("quote balance vs capital_cap", None,
+                                "skipped: balance unreadable"))
+
+    if data_source is None:
+        from autopilot.data.sources import DataSourceError, make_source
+        try:
+            data_source = make_source(cfg.source, cfg.timeframe, cfg.csv_path)
+        except DataSourceError as e:
+            checks.append(Check("market data source reachable", False, str(e)))
+            data_source = None
+    if data_source is not None:
+        try:
+            candles = data_source.fetch(cfg.symbol, cfg.timeframe, limit=5)
+            checks.append(Check(
+                "market data source reachable",
+                len(candles) > 0,
+                f"{len(candles)} recent {cfg.timeframe} candles for {cfg.symbol}"))
+        except Exception as e:
+            checks.append(Check("market data source reachable", False, str(e)))
+
+    try:
+        os.makedirs(os.path.dirname(os.path.abspath(cfg.state_db)) or ".",
+                    exist_ok=True)
+        checks.append(Check("state directory writable", True, cfg.state_db))
+    except OSError as e:
+        checks.append(Check("state directory writable", False, str(e)))
+
+    return checks
+
+
 class LiveBroker(Broker):
     """Thin, defensive wrapper over a ccxt exchange.
 

@@ -348,11 +348,39 @@ def cmd_paper(args) -> int:
                      args.iterations)
 
 
+def _print_preflight(checks) -> bool:
+    print("\nLive preflight (read-only, places no orders):")
+    for c in checks:
+        line = f"  {c.icon} {c.name}"
+        if c.detail:
+            line += f"  — {c.detail}"
+        print(line)
+    failures = [c for c in checks if c.ok is False]
+    skipped = [c for c in checks if c.ok is None]
+    if failures:
+        print(f"\n{len(failures)} check(s) FAILED — fix them and rerun "
+              "`autopilot live-check`.")
+    elif skipped:
+        print("\nno failures, but some checks were skipped.")
+    else:
+        print("\nall checks passed.")
+    return not failures
+
+
+def cmd_live_check(args) -> int:
+    cfg = Config.load(args.config)
+    from autopilot.execution.live_ccxt import run_live_preflight
+    return 0 if _print_preflight(run_live_preflight(cfg)) else 1
+
+
 def cmd_live(args) -> int:
     cfg = Config.load(args.config)
     if cfg.mode != "live":
         return _err("config mode must be 'live' for `autopilot live`")
-    from autopilot.execution.live_ccxt import LiveBroker, assert_live_interlocks
+    from autopilot.execution.live_ccxt import (LiveBroker, assert_live_interlocks,
+                                               run_live_preflight)
+    if not _print_preflight(run_live_preflight(cfg)):
+        return _err("live preflight failed — nothing was traded")
     assert_live_interlocks(cfg)
     print("=" * 70)
     print("LIVE TRADING — REAL MONEY. The bot will place real orders on "
@@ -504,6 +532,11 @@ def build_parser() -> argparse.ArgumentParser:
     pa.add_argument("--config", required=True)
     pa.add_argument("--iterations", type=int, help=argparse.SUPPRESS)
     pa.set_defaults(fn=cmd_paper)
+
+    lc = sub.add_parser("live-check",
+                        help="verify a live setup end-to-end WITHOUT trading")
+    lc.add_argument("--config", required=True)
+    lc.set_defaults(fn=cmd_live_check)
 
     li = sub.add_parser("live", help="REAL-MONEY trading (read docs/GO-LIVE.md first)")
     li.add_argument("--config", required=True)

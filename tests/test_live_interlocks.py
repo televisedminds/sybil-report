@@ -6,25 +6,31 @@ from autopilot.config import Config
 from autopilot.execution.broker import BrokerError
 from autopilot.execution.live_ccxt import (
     CONFIRM_ENV, CONFIRM_PHRASE, KEY_ENV, SECRET_ENV, LiveBroker,
-    assert_live_interlocks,
+    assert_live_interlocks, run_live_preflight,
 )
 from autopilot.execution.orders import Order
 from autopilot.runner.state import StateStore
+from tests.helpers import mk_candles
 
 GOOD_ENV = {CONFIRM_ENV: CONFIRM_PHRASE, KEY_ENV: "k", SECRET_ENV: "s"}
 
 
-def live_cfg(cap=200.0):
+def live_cfg(cap=200.0, **extra):
     return Config.from_dict({"mode": "live", "live": {"capital_cap": cap},
-                             "symbol": "BTC-USD"})
+                             "symbol": "BTC-USD", **extra})
 
 
 class FakeExchange:
     """Minimal ccxt-shaped stub."""
 
-    def __init__(self, quote_free=1000.0, base_free=0.0):
+    def __init__(self, quote_free=1000.0, base_free=0.0,
+                 markets=("BTC/USD", "ETH/USD")):
         self.balances = {"USD": quote_free, "BTC": base_free}
         self.orders = []
+        self.markets = {m: {} for m in markets}
+
+    def load_markets(self):
+        return dict(self.markets)
 
     def fetch_balance(self):
         return {"free": dict(self.balances)}
@@ -114,6 +120,58 @@ class LiveBrokerTests(unittest.TestCase):
                           100.0, 1)
         b2 = LiveBroker(live_cfg(), self.store, env=GOOD_ENV, client=ex)
         self.assertAlmostEqual(b2.portfolio.qty, b1.portfolio.qty)
+
+
+class SyntheticDataSource:
+    def fetch(self, symbol, timeframe, start_ms=None, end_ms=None, limit=None):
+        return mk_candles([100.0] * (limit or 5))
+
+
+class PreflightTests(unittest.TestCase):
+    def _cfg(self, **extra):
+        cfg = live_cfg(**extra)
+        cfg.state_db = os.path.join(tempfile.gettempdir(), "preflight-test.db")
+        return cfg
+
+    def _run(self, cfg=None, env=GOOD_ENV, client="default"):
+        if client == "default":
+            client = FakeExchange()
+        return run_live_preflight(cfg or self._cfg(), env=env, client=client,
+                                  data_source=SyntheticDataSource())
+
+    def test_all_green_with_good_setup(self):
+        checks = self._run()
+        self.assertTrue(all(c.ok for c in checks),
+                        [f"{c.name}: {c.detail}" for c in checks if not c.ok])
+
+    def test_missing_env_fails_interlocks_and_never_trades(self):
+        client = FakeExchange()
+        checks = run_live_preflight(self._cfg(), env={}, client=client,
+                                    data_source=SyntheticDataSource())
+        failed = {c.name for c in checks if c.ok is False}
+        self.assertTrue(any("confirmation phrase" in n for n in failed))
+        self.assertTrue(any("trade-only key" in n for n in failed))
+        self.assertEqual(client.orders, [])  # read-only, always
+
+    def test_unlisted_symbol_fails_with_suggestions(self):
+        client = FakeExchange(markets=("BTC/EUR", "BTC/USDT"))
+        checks = self._run(client=client)
+        bad = [c for c in checks if c.ok is False]
+        self.assertEqual(len(bad), 1)
+        self.assertIn("lists BTC/USD", bad[0].name)
+        self.assertIn("BTC/EUR", bad[0].detail)
+
+    def test_tiny_balance_fails_cap_check(self):
+        checks = self._run(client=FakeExchange(quote_free=2.0))
+        bad = {c.name for c in checks if c.ok is False}
+        self.assertIn("quote balance vs capital_cap", bad)
+
+    def test_no_client_skips_venue_checks(self):
+        checks = run_live_preflight(self._cfg(), env={CONFIRM_ENV: CONFIRM_PHRASE},
+                                    client=None, data_source=SyntheticDataSource())
+        # keys missing -> ccxt path can't build a client -> venue checks skipped
+        skipped = [c for c in checks if c.ok is None]
+        self.assertTrue(any("read balances" in c.name for c in skipped))
 
 
 if __name__ == "__main__":

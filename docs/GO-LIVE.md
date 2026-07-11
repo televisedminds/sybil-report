@@ -65,9 +65,15 @@ RestartSec=30
 WantedBy=multi-user.target
 ```
 
-## 5. Arm and launch
+## 5. Preflight, arm and launch
 - [ ] `export AUTOPILOT_LIVE_CONFIRM=I-UNDERSTAND-REAL-MONEY-CAN-BE-LOST`
       (typing that sentence is the point).
+- [ ] `python3 -m autopilot live-check --config configs/my-live.json` —
+      a read-only preflight that verifies the config, interlocks, ccxt, the
+      exchange connection, your API key, the symbol listing, your balance vs
+      the cap, and market data **without placing any order**. Repeat until
+      every line is ✅. (`autopilot live` runs the same preflight and refuses
+      to start if anything fails.)
 - [ ] `python3 -m autopilot live --config configs/my-live.json`
 - [ ] Confirm the startup banner shows the right venue and cap; confirm the
       dashboard loads; confirm the first `heartbeat` event.
