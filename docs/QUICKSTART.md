@@ -205,11 +205,23 @@ have two good options:
    (SSH apps have an on-screen Ctrl key).
 5. Monitor from the phone: set a **Discord webhook** (Step 7) so every trade
    and risk event pings you, and run `python3 -m autopilot status --state
-   state/YOUR.db` in the SSH app for a snapshot. (The web dashboard is
-   local-only by design; on a phone, alerts + status cover daily monitoring.
-   Advanced: install Tailscale on the server and phone, set the config's
-   `dashboard.host` to the server's Tailscale IP, and open port 8899 in your
-   phone browser — private, no public exposure.)
+   state/YOUR.db` in the SSH app for a snapshot.
+6. **See the full web dashboard in your phone browser (secret link):** the
+   dashboard is local-only by default, but you can serve a read-only copy
+   behind a secret token. In a second tmux session (`tmux new -s dash`):
+
+   ```bash
+   cd ~/autopilot
+   python3 -m autopilot dashboard --state state/YOUR.db \
+       --host 0.0.0.0 --port 8900 --token PICK-A-LONG-SECRET
+   ```
+
+   then open `http://YOUR_SERVER_IP:8900/?token=PICK-A-LONG-SECRET` in the
+   phone browser and bookmark it. Anyone WITH that exact link can view
+   (read-only), so make the token long and random and keep the link private.
+   If it doesn't load, open the port: `ufw allow 8900` (if ufw is active).
+   Fully private alternative: install Tailscale on the server and phone and
+   use the server's Tailscale IP as `--host` instead of `0.0.0.0`.
 
 **Option 2 (Android only, free, for trying it today): Termux.**
 Install Termux (F-Droid or GitHub releases — the Play Store copy is often

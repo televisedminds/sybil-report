@@ -7,6 +7,7 @@ reverse proxy/auth.
 
 from __future__ import annotations
 
+import hmac
 import json
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -18,6 +19,11 @@ from autopilot.server.page import html_page, safe_json
 DASH_SCRIPT = r"""
 'use strict';
 const REFRESH_MS = 10000;
+const TOKEN = new URLSearchParams(location.search).get('token');
+function apiUrl(path) {
+  if (!TOKEN) return path;
+  return path + (path.includes('?') ? '&' : '?') + 'token=' + encodeURIComponent(TOKEN);
+}
 let chart = null, lastPayload = null;
 
 function el(id) { return document.getElementById(id); }
@@ -119,10 +125,10 @@ async function refresh() {
   try {
     main.classList.add('loading');
     const [s, eq, tr, ev] = await Promise.all([
-      fetch('/api/summary').then(r => r.json()),
-      fetch('/api/equity?n=1500').then(r => r.json()),
-      fetch('/api/trades?n=500').then(r => r.json()),
-      fetch('/api/events?n=50').then(r => r.json()),
+      fetch(apiUrl('/api/summary')).then(r => r.json()),
+      fetch(apiUrl('/api/equity?n=1500')).then(r => r.json()),
+      fetch(apiUrl('/api/trades?n=500')).then(r => r.json()),
+      fetch(apiUrl('/api/events?n=50')).then(r => r.json()),
     ]);
     renderSummary(s); renderEquity(eq); renderTrades(tr); renderEvents(ev);
   } catch (e) {
@@ -209,6 +215,13 @@ class _Handler(BaseHTTPRequestHandler):
         store: StateStore = self.server.store  # type: ignore[attr-defined]
         url = urlparse(self.path)
         q = parse_qs(url.query)
+        token: str | None = getattr(self.server, "token", None)
+        if token:
+            supplied = q.get("token", [""])[0]
+            if not hmac.compare_digest(supplied, token):
+                self._send(401, b"missing or wrong token - open the dashboard as "
+                                b"http://HOST:PORT/?token=YOUR_SECRET", "text/plain")
+                return
         n = int(q.get("n", ["500"])[0])
         try:
             if url.path == "/":
@@ -235,10 +248,17 @@ class _Handler(BaseHTTPRequestHandler):
 
 
 class DashboardServer:
-    def __init__(self, state_db: str, host: str = "127.0.0.1", port: int = 8899):
+    def __init__(self, state_db: str, host: str = "127.0.0.1", port: int = 8899,
+                 token: str | None = None):
+        if host not in ("127.0.0.1", "localhost", "::1") and not token:
+            raise ValueError(
+                f"refusing to serve the dashboard on {host!r} without a token — "
+                "pass a secret token so only people with the link can view it")
         self.httpd = ThreadingHTTPServer((host, port), _Handler)
         self.httpd.store = StateStore(state_db)  # type: ignore[attr-defined]
+        self.httpd.token = token  # type: ignore[attr-defined]
         self.host, self.port = host, self.httpd.server_address[1]
+        self.token = token
         self._thread: threading.Thread | None = None
 
     @property

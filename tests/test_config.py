@@ -59,6 +59,13 @@ class ConfigTests(unittest.TestCase):
         with self.assertRaises(ConfigError):
             Config.from_dict({"source": "csv"})
 
+    def test_public_dashboard_requires_token(self):
+        with self.assertRaises(ConfigError):
+            Config.from_dict({"dashboard": {"host": "0.0.0.0"}})
+        cfg = Config.from_dict({"dashboard": {"host": "0.0.0.0",
+                                              "token": "secret-word"}})
+        self.assertEqual(cfg.dashboard_token, "secret-word")
+
     def test_load_file(self):
         with tempfile.TemporaryDirectory() as d:
             path = os.path.join(d, "c.json")

@@ -139,6 +139,39 @@ class DashboardServerTests(unittest.TestCase):
             finally:
                 dash.stop()
 
+    def test_token_gate(self):
+        with tempfile.TemporaryDirectory() as d:
+            db = os.path.join(d, "s.db")
+            store = StateStore(db)
+            store.kv_set("summary", {"symbol": "X-USD"})
+            store.close()
+
+            dash = DashboardServer(db, host="127.0.0.1", port=0, token="hunter2")
+            dash.start()
+            try:
+                base = dash.url
+                # no token and wrong token -> 401
+                for path in ("/", "/api/summary", "/api/summary?token=wrong"):
+                    with self.assertRaises(urllib.error.HTTPError) as cm:
+                        urllib.request.urlopen(base + path, timeout=5)
+                    self.assertEqual(cm.exception.code, 401)
+                # right token -> page and API both work
+                page = urllib.request.urlopen(
+                    base + "/?token=hunter2", timeout=5).read().decode()
+                self.assertIn("Autopilot", page)
+                summary = json.loads(urllib.request.urlopen(
+                    base + "/api/summary?token=hunter2", timeout=5).read())
+                self.assertEqual(summary["symbol"], "X-USD")
+            finally:
+                dash.stop()
+
+    def test_public_bind_requires_token(self):
+        with tempfile.TemporaryDirectory() as d:
+            db = os.path.join(d, "s.db")
+            StateStore(db).close()
+            with self.assertRaises(ValueError):
+                DashboardServer(db, host="0.0.0.0", port=0, token=None)
+
 
 if __name__ == "__main__":
     unittest.main()

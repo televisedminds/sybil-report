@@ -66,6 +66,7 @@ class Config:
     dashboard_enabled: bool = True
     dashboard_host: str = "127.0.0.1"
     dashboard_port: int = 8899
+    dashboard_token: str | None = None
     webhook_url: str | None = None
     live_exchange: str = "kraken"
     live_capital_cap: float = 0.0       # hard ceiling on cash the bot may use
@@ -89,6 +90,13 @@ class Config:
             raise ConfigError(
                 "live mode requires live.capital_cap > 0 — an explicit hard ceiling "
                 "on how much cash the bot may touch")
+        if (self.dashboard_enabled
+                and self.dashboard_host not in ("127.0.0.1", "localhost", "::1")
+                and not self.dashboard_token):
+            raise ConfigError(
+                "a dashboard reachable from other machines "
+                f"(host={self.dashboard_host!r}) requires dashboard.token — a "
+                "secret word viewers must put in the URL (?token=...)")
         self.risk.validate()
 
     @staticmethod
@@ -110,7 +118,8 @@ class Config:
         live = _take(top["live"] or {}, "live",
                      {"exchange": "kraken", "capital_cap": 0.0})
         dash = _take(top["dashboard"] or {}, "dashboard",
-                     {"enabled": True, "host": "127.0.0.1", "port": 8899})
+                     {"enabled": True, "host": "127.0.0.1", "port": 8899,
+                      "token": None})
         notify = _take(top["notify"] or {}, "notify", {"webhook_url": None})
 
         cfg = Config(
@@ -122,7 +131,8 @@ class Config:
             backtest_start=bt["start"], backtest_end=bt["end"],
             poll_seconds=int(paper["poll_seconds"]), state_db=paper["state_db"],
             dashboard_enabled=bool(dash["enabled"]), dashboard_host=dash["host"],
-            dashboard_port=int(dash["port"]), webhook_url=notify["webhook_url"],
+            dashboard_port=int(dash["port"]), dashboard_token=dash["token"],
+            webhook_url=notify["webhook_url"],
             live_exchange=live["exchange"], live_capital_cap=float(live["capital_cap"]),
         )
         cfg.validate()

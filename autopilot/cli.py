@@ -315,10 +315,12 @@ def _run_loop(cfg: Config, broker, store, source, strategy, risk, notifier,
     if cfg.dashboard_enabled:
         from autopilot.server.dashboard import DashboardServer
         try:
-            dash = DashboardServer(cfg.state_db, cfg.dashboard_host, cfg.dashboard_port)
+            dash = DashboardServer(cfg.state_db, cfg.dashboard_host,
+                                   cfg.dashboard_port, token=cfg.dashboard_token)
             dash.start()
-            print(f"dashboard: {dash.url}")
-        except OSError as e:
+            suffix = f"/?token={cfg.dashboard_token}" if cfg.dashboard_token else ""
+            print(f"dashboard: {dash.url}{suffix}")
+        except (OSError, ValueError) as e:
             print(f"dashboard disabled ({e})", file=sys.stderr)
 
     print(f"{cfg.mode} session: {cfg.symbol} {cfg.timeframe} "
@@ -397,8 +399,15 @@ def cmd_dashboard(args) -> int:
     from autopilot.server.dashboard import DashboardServer
     if not os.path.exists(args.state):
         return _err(f"state db not found: {args.state}")
-    dash = DashboardServer(args.state, args.host, args.port)
-    print(f"dashboard: {dash.url}  (Ctrl-C to stop)")
+    try:
+        dash = DashboardServer(args.state, args.host, args.port, token=args.token)
+    except ValueError as e:
+        return _err(str(e))
+    suffix = f"/?token={args.token}" if args.token else ""
+    print(f"dashboard: {dash.url}{suffix}  (Ctrl-C to stop)")
+    if args.host not in ("127.0.0.1", "localhost", "::1"):
+        print("NOTE: this is reachable from the internet; anyone WITH the exact "
+              "token link can view (read-only). Keep the link private.")
     try:
         dash.httpd.serve_forever()
     except KeyboardInterrupt:
@@ -545,8 +554,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     da = sub.add_parser("dashboard", help="serve the web dashboard for a session db")
     da.add_argument("--state", required=True)
-    da.add_argument("--host", default="127.0.0.1")
+    da.add_argument("--host", default="127.0.0.1",
+                    help="0.0.0.0 to allow phone/remote viewing (requires --token)")
     da.add_argument("--port", type=int, default=8899)
+    da.add_argument("--token",
+                    help="secret word viewers must include as ?token=... in the URL")
     da.set_defaults(fn=cmd_dashboard)
 
     st = sub.add_parser("status", help="print a session summary")
