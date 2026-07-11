@@ -185,6 +185,54 @@ listens on the machine it runs on — don't expose it to the internet.)
 | `risk: KILLED (…)` | The max-drawdown brake fired. Read Step 7, then `resume` deliberately |
 | Bot was off for a while | Fine. It resumes and logs `catchup_skip` instead of trading stale signals |
 
+## Using it from ONLY a phone
+
+The bot is a normal program — it needs a computer to run on. From a phone you
+have two good options:
+
+**Option 1 (recommended): rent a tiny server, control it from the phone.**
+1. In your phone browser, sign up at a cloud host (Hetzner, DigitalOcean,
+   Vultr — any is fine) and create their cheapest **Ubuntu** server
+   (~$4–6/month). They give you an IP address and a root password.
+2. Install a free SSH app: **Termius** (iPhone & Android) or **JuiceSSH**
+   (Android). Add a host with that IP, user `root`, and the password.
+   Connecting gives you the same black terminal as a PC.
+3. In that terminal, follow this guide from Step 1 (`apt install -y python3
+   git`, clone, `demo`, `init`, `paper`).
+4. So it keeps running after you close the app, either use the systemd
+   recipe in Step 6 (best — survives reboots), or run inside tmux:
+   `tmux new -s bot`, start the bot, then detach with `Ctrl-B` then `D`
+   (SSH apps have an on-screen Ctrl key).
+5. Monitor from the phone: set a **Discord webhook** (Step 7) so every trade
+   and risk event pings you, and run `python3 -m autopilot status --state
+   state/YOUR.db` in the SSH app for a snapshot. (The web dashboard is
+   local-only by design; on a phone, alerts + status cover daily monitoring.
+   Advanced: install Tailscale on the server and phone, set the config's
+   `dashboard.host` to the server's Tailscale IP, and open port 8899 in your
+   phone browser — private, no public exposure.)
+
+**Option 2 (Android only, free, for trying it today): Termux.**
+Install Termux (F-Droid or GitHub releases — the Play Store copy is often
+outdated), then:
+
+```bash
+pkg update && pkg install -y python git
+git clone -b claude/passive-income-automation-1eukga https://github.com/televisedminds/sybil-report.git autopilot
+cd autopilot
+python -m autopilot demo
+python -m autopilot init
+python -m autopilot paper --config configs/YOUR_CONFIG.json
+```
+
+Then open **http://127.0.0.1:8899** in Chrome on the same phone — the full
+dashboard works locally. Run `termux-wakelock` first to reduce Android
+killing it in the background. Honest caveat: phones sleep and Android kills
+background apps, so Termux is great for the demo and short paper sessions,
+not for serious 24/7 — that's what Option 1 is for. (When the bot is off it
+misses candles safely and resumes cleanly; nothing corrupts.)
+
+iPhone has no practical way to run it *locally* — use Option 1.
+
 ## Set your expectations (the honest part)
 
 Paper mode exists because **most strategy/market combinations lose money in
