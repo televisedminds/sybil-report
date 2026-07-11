@@ -116,6 +116,41 @@ buy & hold +34.8% with 67.0% max drawdown:
 | rsi_revert | **−34.3%** | −4.3% | −0.14 | 47.8% |
 | grid | +1,506.0% | 33.8% | 0.78 | 89.2% |
 
+### Intraday reality check (added 2026-07-11)
+
+Tested on real Coinbase intraday candles: 17,766 hourly candles
+(2024-07 → 2026-07, a flat window: buy & hold +2.0%) and 36,015
+fifteen-minute candles (2025-07 → 2026-07, a bear window: buy & hold −40.3%).
+Retail costs 25 bps fee + 5 bps slippage unless noted.
+
+**1h, 2 years:**
+
+| strategy | return | fills | fees | note |
+|---|---:|---:|---:|---|
+| dca | +1.0% | 50 | $25 | matched the flat market |
+| sma_cross 50/200 | −15.6% | 126 | $2,985 | whipsawed |
+| sma_cross 20/100 (faster) | **−41.2%** | 246 | $5,809 | trading faster doubled the damage |
+| rsi_revert | −31.4% | 238 | $2,494 | oversold kept falling |
+| grid | **+22.8%** | 215 | $441 | the chop harvester in its ideal habitat |
+
+**15m, 1 year (bear):** everything lost — sma_cross −58.4%, rsi_revert
+−53.0%, grid −26.0% (vs −40.3% for holding). At maker-tier costs
+(10 bps + 2 bps) grid improved only marginally (15m: −25.4%; 1h: +25.1%).
+
+What this measures, plainly:
+
+1. **Speed multiplies cost, not edge.** Every faster variant did worse than
+   its slower sibling, in close proportion to fees paid. Retail day trading
+   competes against market-making firms with colocated servers and ~0 fees —
+   it is the most crowded arena in finance, not a blue ocean.
+2. **The one intraday survivor** (hourly grid) earned ≈ 11% CAGR ≈ 0.9%/month
+   in a *favorable* regime — and the same strategy lost 26% in a trending
+   year. Regime risk is the price of grid's steady wins.
+3. The intraday config we ship (`configs/paper-daytrade-btc.json`) is that
+   hourly grid with tight brakes (3% daily halt, 15% kill switch) so its bad
+   regime is survivable. Expectation-setting: single-digit percent per month
+   in chop, capped losses in trends, no guarantees anywhere.
+
 ### What a professional reads out of this
 
 1. **Buy & hold won the decade on raw return.** Any honest system built on a

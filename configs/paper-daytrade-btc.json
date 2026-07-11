@@ -1,0 +1,23 @@
+{
+  "_README": "Intraday (hourly) grid setup — the only day-trading style that survived our intraday backtests, and ONLY in sideways markets (it made +23%/2yr in chop and would lose in a strong trend; the tight risk brakes below are what cap that loss). See docs/RESEARCH.md 'Intraday reality check'. Paper mode: no real money.",
+
+  "mode": "paper",
+  "symbol": "BTC-USD",
+  "timeframe": "1h",
+  "source": "auto",
+  "start_cash": 10000,
+  "strategy": {
+    "name": "grid",
+    "params": {"levels_per_side": 6, "span_pct": 25.0, "quote_per_level": 0, "recenter_mult": 1.5}
+  },
+  "risk": {
+    "max_position_pct": 80,
+    "max_order_pct": 15,
+    "daily_loss_limit_pct": 3,
+    "max_drawdown_pct": 15,
+    "max_orders_per_day": 96
+  },
+  "paper": {"poll_seconds": 60, "state_db": "state/paper-daytrade-btc.db"},
+  "dashboard": {"enabled": true, "host": "127.0.0.1", "port": 8901},
+  "notify": {"webhook_url": null}
+}
